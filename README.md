@@ -3,6 +3,7 @@
 ### To compile
 `
     cargo run db.csv
+    
 `
 
 

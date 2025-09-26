@@ -2,6 +2,7 @@
 name = "a3login"
 version = "0.1.0"
 edition = "2024"
+authors = ["Anwar Jahid", "Mohammad Khan "]
 
 [dependencies]
 csv = "1"

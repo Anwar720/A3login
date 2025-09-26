@@ -13,6 +13,7 @@ fn open_db(file_path: &str) -> csv::Reader<File> {
 }
 
 // look through csv file for username
+// return true if found, false otherwise
 fn is_valid_username(username: &str, db_path: &str) -> bool {
     let mut db = open_db(db_path);
     let users: Vec<String> = db
@@ -25,23 +26,27 @@ fn is_valid_username(username: &str, db_path: &str) -> bool {
 }
 
 // get password hash for username
+// return Some(hash) if found, None otherwise
 fn get_password_hash(username: &str, db_path: &str) -> Option<String> {
     let mut db = open_db(db_path);
-    for result in db.records() {
-        let record = result.ok()?;
-        if record[0] == username.to_string() {
-            return Some(record[1].to_string()); 
-        }
-    }
-    None
+
+    db.records()
+        .filter_map(|r| r.ok())                 
+        .find(|record| record.get(0).map_or(false, |u| u == username))
+        .and_then(|record| record.get(1).map(|h| h.to_string()))
 }
 
+// verify password against hash
+// return true if valid, false otherwise
 fn is_valid_password(username: &str, password: &str, db_path: &str) -> bool {
-    let hash = get_password_hash(username, db_path).unwrap();
-
-    let parsed_hash = PasswordHash::new(&hash).expect("Invalid hash format");
-    Argon2::default()
-        .verify_password(password.as_bytes(),&parsed_hash).is_ok()
+    if let Some(hash) = get_password_hash(username, db_path) {
+        if let Ok(parsed_hash) = PasswordHash::new(&hash) {
+            return Argon2::default()
+                .verify_password(password.as_bytes(), &parsed_hash)
+                .is_ok();
+        }
+    }
+    false
 }
 
 fn main() {
@@ -71,4 +76,34 @@ fn main() {
     } else {
         println!("Error! Access Denied!");
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    // test valid username and invalid username
+    fn test_is_valid_username() {
+        let db_path = "db.csv";
+        assert!(is_valid_username("admin", db_path));
+        assert!(!is_valid_username("random_user", db_path));       
+    }
+    
+    #[test]
+    //test hash retrieval for valid and invalid username
+    fn test_get_password_hash() {
+        let db_path = "db.csv";
+        assert_eq!(get_password_hash("admin", db_path).unwrap(), "$argon2id$v=19$m=19456,t=2,p=1$difPUw5AhyFN/URJZ0IY8g$VDC5PPK0Lx8IeI6LttXQ90zL3BuH/AAQV1ndGEovpPY");
+        assert!(get_password_hash("random_user", db_path).is_none());      
+    }
+
+    #[test]
+    // test valid password and invalid password
+    fn test_is_valid_password() {
+        let db_path = "db.csv";
+        assert!(is_valid_password("guest", "guest", db_path));
+        assert!(!is_valid_password("guest", "wrongpassword", db_path));     
+    }
+
 }
